@@ -1,0 +1,62 @@
+---
+- name: Config router
+  hosts: all
+  become: yes
+  gather_facts: yes
+  vars:
+
+  tasks:
+    - name: Set Sysctl setting for routing
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    - name: Set Sysctl setting for assymetrical routing
+      ansible.posix.sysctl:
+        name: net.ipv4.conf.all.rp_filter
+        value: '0'
+        sysctl_set: yes
+        state: present
+        reload: yes
+
+    - name: Set Router-id step 1
+      ansible.builtin.set_fact:
+        rid: "{{ansible_hostname[-1:]}}"
+
+    - name: Set Router-id step 2
+      ansible.builtin.set_fact:
+        rid: "{{rid}}.{{rid}}.{{rid}}.{{rid}}"
+
+    - name: Install FRR
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+        name:
+          - frr
+
+    - name: Set start OSPF
+      ansible.builtin.lineinfile:
+        backrefs: yes
+        regexp: '^(ospfd=)no'
+        path: /etc/frr/daemons
+        line: '\1yes'
+
+    - name: Generate FRR config
+      ansible.builtin.template:
+        dest: /etc/frr/frr.conf
+        src: frr.conf.j2
+        owner: frr
+        group: frr
+        mode: 0640
+      notify:
+        - Restart FRR
+
+  handlers:
+    - name: Restart FRR
+      ansible.builtin.systemd:
+        name: frr
+        enabled: yes
+        state: restarted

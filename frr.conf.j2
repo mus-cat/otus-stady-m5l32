@@ -1,0 +1,27 @@
+frr version 7.5.1
+frr defaults traditional
+hostname router1
+log syslog informational
+no ipv6 forwarding
+service integrated-vtysh-config
+!
+{% for interface in ansible_interfaces if interface != 'lo' and ansible_facts[interface].ipv4.network != '10.0.2.0' %}
+interface {{interface}}
+ ip ospf mtu-ignore
+ ip ospf hello-interval 10
+ ip ospf dead-interval 30
+!
+{% endfor %}
+!
+router ospf
+ ospf router-id {{rid}}
+{% for interface in ansible_interfaces %}
+{% set net_info = ansible_facts[interface].ipv4 %}
+{% set ipwmask = net_info.address + '/' +  net_info.netmask %}
+{% if interface != 'lo' and net_info.network != '10.0.2.0' %}
+ network {{net_info.network}}/{{ipwmask | ipaddr('prefix')}} area 1
+{% endif %}
+{% endfor %}
+!
+line vty
+!
